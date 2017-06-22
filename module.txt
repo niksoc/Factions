@@ -1,0 +1,9 @@
+{
+    "id": "Factions",
+    "version": "0.0.1",
+    "author": "niksoc",
+    "displayName": "Factions",
+    "description": "Base Factions Module",
+    "dependencies": [],
+    "serverSideOnly": false
+}
