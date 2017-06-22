@@ -17,16 +17,16 @@ package org.terasology.factions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.terasology.entitySystem.entity.EntityRef;
+import org.terasology.entitySystem.event.ReceiveEvent;
 import org.terasology.entitySystem.systems.BaseComponentSystem;
 import org.terasology.entitySystem.systems.RegisterSystem;
 import org.terasology.factions.policies.InternalPolicy;
 import org.terasology.factions.policies.OneWayPolicy;
 import org.terasology.factions.policies.TwoWayPolicy;
-import org.terasology.factions.policies.generator.InternalPolicyGenerator;
-import org.terasology.factions.policies.generator.OneWayPolicyGenerator;
-import org.terasology.factions.policies.generator.TwoWayPolicyGenerator;
 import org.terasology.factions.utils.OrderedPair;
 import org.terasology.factions.utils.UnorderedPair;
+import org.terasology.logic.players.event.OnPlayerSpawnedEvent;
 import org.terasology.registry.Share;
 
 import java.util.HashMap;
@@ -43,11 +43,6 @@ public class FactionSystem extends BaseComponentSystem{
     private Map<OrderedPair<String, String>, Map<Class<? extends OneWayPolicy>, OneWayPolicy> > oneWayPolicies;
     private Map<UnorderedPair<String , String>, Map<Class<? extends TwoWayPolicy>, TwoWayPolicy> > twoWayPolicies;
 
-    private Map<Class<? extends InternalPolicy>, InternalPolicyGenerator> internalPolicyGenerators;
-    private Map<Class<? extends OneWayPolicy>, OneWayPolicyGenerator> oneWayPolicyGenerators;
-    private Map<Class<? extends TwoWayPolicy>, TwoWayPolicyGenerator> twoWayPolicyGenerators;
-
-
     private static final Logger logger = LoggerFactory.getLogger(FactionSystem.class);
 
     public FactionSystem() {
@@ -57,7 +52,7 @@ public class FactionSystem extends BaseComponentSystem{
     }
 
     private boolean isExistingFaction(String factionName) {
-        return internalPolicies.get(factionName) == null;
+        return internalPolicies.get(factionName) != null;
     }
 
     public void createFaction(String newFactionName) {
@@ -152,62 +147,17 @@ public class FactionSystem extends BaseComponentSystem{
         twoWayPolicies.get(factionPair).put(twoWayPolicy.getClass(), twoWayPolicy);
     }
 
-    public <T extends InternalPolicy> void registerInternalPolicyGenerator(Class<T> policyClass
-            , InternalPolicyGenerator<T> policyGenerator) {
-        internalPolicyGenerators.put(policyClass, policyGenerator);
-    }
-
-    public <T extends OneWayPolicy> void registerOneWayPolicyGenerator(Class<T> policyClass
-            , OneWayPolicyGenerator<T> policyGenerator) {
-        oneWayPolicyGenerators.put(policyClass, policyGenerator);
-    }
-
-    public <T extends TwoWayPolicy> void registerTwoWayPolicyGenerator(Class<T> policyClass
-            , TwoWayPolicyGenerator<T> policyGenerator) {
-        twoWayPolicyGenerators.put(policyClass, policyGenerator);
-    }
-
-
-    private  <T extends InternalPolicy> void generatePolicies(InternalPolicyGenerator<T> policyGenerator) {
-        for (String faction : internalPolicies.keySet()) {
-            T policy = policyGenerator.getPolicy(faction, this);
-            internalPolicies.get(faction).putIfAbsent(policy.getClass(), policy);
-        }
-    }
-
-    private  <T extends OneWayPolicy> void generatePolicies(OneWayPolicyGenerator<T> policyGenerator) {
-            for (String firstFaction : internalPolicies.keySet()) {
-                for (String secondFaction : internalPolicies.keySet()) {
-                    if (firstFaction.equals(secondFaction)) {
-                        continue;
-                    }
-                    T policy = policyGenerator.getPolicy(firstFaction, secondFaction, this);
-                    OrderedPair<String, String> a_b = new OrderedPair<>(firstFaction, secondFaction);
-                    oneWayPolicies.get(a_b).putIfAbsent(policy.getClass(), policy);
-                }
-            }
-    }
-
-    private  <T extends TwoWayPolicy> void generatePolicies(TwoWayPolicyGenerator<T> policyGenerator) {
-        for (String firstFaction : internalPolicies.keySet()) {
-            for (String secondFaction : internalPolicies.keySet()) {
-                if (firstFaction.equals(secondFaction)) {
-                    continue;
-                }
-                UnorderedPair<String, String> a_b = new UnorderedPair<>(firstFaction, secondFaction);
-
-                T policy = policyGenerator.getPolicy(firstFaction, secondFaction, this);
-                twoWayPolicies.get(a_b).putIfAbsent(policy.getClass(), policy);
-            }
-        }
-    }
-
     @Override
-    public void postBegin() {
+    public void initialise() {
         // testing done here
         createFaction("Elves");
         createFaction("Dwarves");
         createFaction("Humans");
+    }
+
+    @ReceiveEvent
+    public void onPlayerSpawn(OnPlayerSpawnedEvent event, EntityRef entity) {
+        entity.saveComponent(new FactionComponent("Elves"));
     }
 
 }

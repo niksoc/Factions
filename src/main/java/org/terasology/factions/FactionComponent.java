@@ -18,7 +18,10 @@ package org.terasology.factions;
 import org.terasology.entitySystem.Component;
 
 public class FactionComponent implements Component{
-    String name;
+    public String name;
+
+    public FactionComponent() {
+    }
 
     public FactionComponent(String name) {
         this.name = name;
