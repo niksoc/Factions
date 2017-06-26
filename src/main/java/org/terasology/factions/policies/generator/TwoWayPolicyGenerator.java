@@ -15,7 +15,7 @@
  */
 package org.terasology.factions.policies.generator;
 
-import org.terasology.factions.policies.TwoWayPolicy;
+import org.terasology.factions.policies.policies.TwoWayPolicy;
 
 public abstract class TwoWayPolicyGenerator<T extends TwoWayPolicy> extends ExternalPolicyGenerator<T> {
 }

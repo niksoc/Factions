@@ -17,16 +17,26 @@ package org.terasology.factions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.terasology.assets.management.AssetManager;
+import org.terasology.entitySystem.entity.EntityBuilder;
+import org.terasology.entitySystem.entity.EntityManager;
 import org.terasology.entitySystem.entity.EntityRef;
 import org.terasology.entitySystem.event.ReceiveEvent;
+import org.terasology.entitySystem.prefab.Prefab;
+import org.terasology.entitySystem.prefab.PrefabManager;
 import org.terasology.entitySystem.systems.BaseComponentSystem;
 import org.terasology.entitySystem.systems.RegisterSystem;
-import org.terasology.factions.policies.InternalPolicy;
-import org.terasology.factions.policies.OneWayPolicy;
-import org.terasology.factions.policies.TwoWayPolicy;
-import org.terasology.factions.utils.OrderedPair;
-import org.terasology.factions.utils.UnorderedPair;
+import org.terasology.entitySystem.systems.UpdateSubscriberSystem;
+import org.terasology.factions.components.FactionComponent;
+import org.terasology.factions.components.FactionDatabaseComponent;
+import org.terasology.factions.components.FactionMemberComponent;
+import org.terasology.factions.policies.FactionPolicySystem;
+import org.terasology.factions.policies.policies.InternalPolicy;
+import org.terasology.factions.policies.policies.Policy;
+import org.terasology.factions.policies.PolicyType;
+import org.terasology.factions.policies.PolicyComponent;
 import org.terasology.logic.players.event.OnPlayerSpawnedEvent;
+import org.terasology.registry.In;
 import org.terasology.registry.Share;
 
 import java.util.HashMap;
@@ -34,130 +44,181 @@ import java.util.Map;
 
 @RegisterSystem
 @Share(FactionSystem.class)
-public class FactionSystem extends BaseComponentSystem{
-    /* I've used strings as UIDs for factions, but as faction names may change, probably use Integers?
-     * but integers may be difficult from a content creator point of view, probably separate faction editor
-     * software needed.
-     */
-    private Map<String, Map<Class<? extends InternalPolicy>, InternalPolicy> > internalPolicies;
-    private Map<OrderedPair<String, String>, Map<Class<? extends OneWayPolicy>, OneWayPolicy> > oneWayPolicies;
-    private Map<UnorderedPair<String , String>, Map<Class<? extends TwoWayPolicy>, TwoWayPolicy> > twoWayPolicies;
+public class FactionSystem extends BaseComponentSystem implements UpdateSubscriberSystem {
+    private EntityRef database;
+    private Map<String, FactionComponent> factions = new HashMap<>();
+
+    @In
+    private EntityManager entityManager;
+    @In
+    private AssetManager assetManager;
+    @In
+    private PrefabManager prefabManager;
+    @In
+    private FactionPolicySystem factionPolicySystem;
 
     private static final Logger logger = LoggerFactory.getLogger(FactionSystem.class);
 
-    public FactionSystem() {
-        internalPolicies = new HashMap<>();
-        oneWayPolicies = new HashMap<>();
-        twoWayPolicies = new HashMap<>();
+    @Override
+    public void update(float delta) {
+        if (entityManager.getCountOfEntitiesWith(FactionDatabaseComponent.class) != 0) {
+            return;
+        }
+
+        EntityBuilder databaseBuilder = entityManager.newBuilder();
+        databaseBuilder.addComponent(new FactionDatabaseComponent());
+        for (Class<? extends Policy> policyClass : factionPolicySystem.getPolicyClasses()) {
+            databaseBuilder.addComponent(factionPolicySystem.getPolicyComponent(policyClass));
+        }
+
+        database = databaseBuilder.build();
+
+        for (Prefab prefab : prefabManager.listPrefabs(FactionComponent.class)) {
+            FactionComponent factionComponent = prefab.getComponent(FactionComponent.class);
+            createFaction(factionComponent);
+        }
+
     }
 
     private boolean isExistingFaction(String factionName) {
-        return internalPolicies.get(factionName) != null;
+        return factions.containsKey(factionName);
     }
 
-    public void createFaction(String newFactionName) {
-        if(isExistingFaction(newFactionName)) {
-            logger.error("Faction with name " + newFactionName + " already exists.");
+    private String getTwoWayPolicyKey(String factionOne, String factionTwo) {
+        if (factionOne.compareTo(factionTwo) == 1) {
+            return factionOne + "`" + factionTwo;
+        } else {
+            return factionTwo + "`" + factionOne;
+        }
+    }
+
+    private void createFaction(FactionComponent newFactionComponent) {
+        String newFaction = newFactionComponent.name;
+        if (isExistingFaction(newFaction)) {
+            logger.error("Faction with name " + newFaction + " already exists.");
             return;
         }
 
-        for(String existingFaction : internalPolicies.keySet()) {
-            OrderedPair<String, String> a_b = new OrderedPair<>(existingFaction, newFactionName);
-            OrderedPair<String, String> b_a = new OrderedPair<>(newFactionName, existingFaction);
-            oneWayPolicies.put(a_b, new HashMap<>());
-            oneWayPolicies.put(b_a, new HashMap<>());
+
+        for (Class<? extends Policy> policyClass : factionPolicySystem.getPolicyClasses()) {
+            final Class<? extends PolicyComponent> policyComponentClass = factionPolicySystem
+                    .getPolicyComponentClass(policyClass);
+
+            PolicyComponent policyComponent = database.getComponent(policyComponentClass);
+
+            PolicyType policyType = PolicyType.getPolicyType(policyClass);
+            if (policyType == PolicyType.INTERNAL) {
+                policyComponent.getPolicyMap().put(newFaction,
+                        policyComponent.newDefaultPolicy());
+            } else {
+                for (String existingFaction : factions.keySet()) {
+                    if (policyType == PolicyType.ONE_WAY) {
+                        policyComponent.getPolicyMap().put(newFaction + "`" + existingFaction,
+                                policyComponent.newDefaultPolicy());
+                        policyComponent.getPolicyMap().put(existingFaction + "`" + newFaction,
+                                policyComponent.newDefaultPolicy());
+                    } else {
+                        String key = getTwoWayPolicyKey(newFaction, existingFaction);
+                        policyComponent.getPolicyMap().put(key, policyComponent.newDefaultPolicy());
+                    }
+                }
+            }
+
+            database.saveComponent(policyComponent);
         }
 
-        for(String existingFaction : internalPolicies.keySet()) {
-            UnorderedPair<String, String> factionPair = new UnorderedPair<>(existingFaction, newFactionName);
-            twoWayPolicies.put(factionPair, new HashMap<>());
-        }
+        factions.put(newFaction, newFactionComponent);
+    }
 
-        internalPolicies.put(newFactionName, new HashMap<>());
+    private <T extends Policy> PolicyComponent getPolicyComponent(Class<T> policyClass) {
+        Class<? extends PolicyComponent> policyComponentClass = factionPolicySystem.getPolicyComponentClass(policyClass);
+        return database.getComponent(policyComponentClass);
     }
 
     public <T extends InternalPolicy> T getInternalPolicy(String factionName, Class<T> internalPolicyClass) {
-        if(!isExistingFaction(factionName)) {
+        if (!isExistingFaction(factionName)) {
             logger.error("Faction " + factionName + " does not exist");
             return null;
         }
-        return (T) internalPolicies.get(factionName).get(internalPolicyClass);
+
+        if (!InternalPolicy.class.isAssignableFrom(internalPolicyClass)) {
+            logger.error(internalPolicyClass.getName() + " is not a subclass of InternalPolicy");
+            return null;
+
+        }
+
+        return (T) getPolicyComponent(internalPolicyClass).getPolicyMap().get(factionName);
     }
 
     public <T extends InternalPolicy> void saveInternalPolicy(String factionName, T internalPolicy) {
-        if(!isExistingFaction(factionName)) {
+        if (!isExistingFaction(factionName)) {
             logger.error("Faction " + factionName + " does not exist");
             return;
         }
-        internalPolicies.get(factionName).put(internalPolicy.getClass(), internalPolicy);
+
+        PolicyComponent policyComponent = getPolicyComponent(internalPolicy.getClass());
+        policyComponent.getPolicyMap().put(factionName, internalPolicy);
+
+        database.saveComponent(policyComponent);
     }
 
+/*
     public <T extends OneWayPolicy> T getOneWayPolicy(String firstFactionName, String secondFactionName
             , Class<T> oneWayPolicyClass) {
-        if(!isExistingFaction(firstFactionName)) {
+        if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return null;
         }
-        if(!isExistingFaction(secondFactionName)) {
+        if (!isExistingFaction(secondFactionName)) {
             logger.error("Faction " + secondFactionName + " does not exist");
             return null;
         }
-        OrderedPair<String, String> factionPair = new OrderedPair<>(firstFactionName, secondFactionName);
-        return (T) oneWayPolicies.get(factionPair).get(oneWayPolicyClass);
+
     }
 
     public <T extends OneWayPolicy> void saveOneWayPolicy(String firstFactionName, String secondFactionName, T oneWayPolicy) {
-        if(!isExistingFaction(firstFactionName)) {
+        if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return;
         }
-        if(!isExistingFaction(secondFactionName)) {
+        if (!isExistingFaction(secondFactionName)) {
             logger.error("Faction " + secondFactionName + " does not exist");
             return;
         }
         OrderedPair<String, String> factionPair = new OrderedPair<>(firstFactionName, secondFactionName);
-        oneWayPolicies.get(factionPair).put(oneWayPolicy.getClass(), oneWayPolicy);
     }
 
     public <T extends TwoWayPolicy> T getTwoWayPolicy(String firstFactionName, String secondFactionName
             , Class<T> twoWayPolicyClass) {
-        if(!isExistingFaction(firstFactionName)) {
+        if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return null;
         }
-        if(!isExistingFaction(secondFactionName)) {
+        if (!isExistingFaction(secondFactionName)) {
             logger.error("Faction " + secondFactionName + " does not exist");
             return null;
         }
         UnorderedPair<String, String> factionPair = new UnorderedPair<>(firstFactionName, secondFactionName);
-        return (T) twoWayPolicies.get(factionPair).get(twoWayPolicyClass);
     }
 
     public <T extends TwoWayPolicy> void saveTwoWayPolicy(String firstFactionName, String secondFactionName
             , T twoWayPolicy) {
-        if(!isExistingFaction(firstFactionName)) {
+        if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return;
         }
-        if(!isExistingFaction(secondFactionName)) {
+        if (!isExistingFaction(secondFactionName)) {
             logger.error("Faction " + secondFactionName + " does not exist");
             return;
         }
         UnorderedPair<String, String> factionPair = new UnorderedPair<>(firstFactionName, secondFactionName);
-        twoWayPolicies.get(factionPair).put(twoWayPolicy.getClass(), twoWayPolicy);
     }
+*/
 
-    @Override
-    public void initialise() {
-        // testing done here
-        createFaction("Elves");
-        createFaction("Dwarves");
-        createFaction("Humans");
-    }
 
     @ReceiveEvent
     public void onPlayerSpawn(OnPlayerSpawnedEvent event, EntityRef entity) {
-        entity.saveComponent(new FactionComponent("Elves"));
+        entity.saveComponent(new FactionMemberComponent("Elves"));
     }
 
 }

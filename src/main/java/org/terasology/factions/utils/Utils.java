@@ -13,7 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.policies;
+package org.terasology.factions.utils;
 
-public class TwoWayPolicy extends ExternalPolicy {
+public class Utils {
+    /**
+     * Throws an IllegalArgumentException if the iterable does not contain exactly one element,
+     * else returns the element.
+     * @param iterable
+     * @param <T>
+     * @return the only element in the iterable
+     */
+    public static <T> T getOnlyElement(Iterable<T> iterable) {
+        int i = 0;
+        T element = null;
+        for(T t : iterable) {
+            element = t;
+            i++;
+        }
+        if(i == 1) {
+            return element;
+        }
+        throw new IllegalArgumentException();
+    }
 }

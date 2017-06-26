@@ -15,5 +15,13 @@
  */
 package org.terasology.factions.policies;
 
-public class OneWayPolicy extends ExternalPolicy {
+import org.terasology.entitySystem.Component;
+import org.terasology.factions.policies.policies.Policy;
+
+import java.util.Map;
+
+public interface PolicyComponent<T extends Policy> extends Component {
+    public T newDefaultPolicy();
+
+    public Map<String, T> getPolicyMap();
 }

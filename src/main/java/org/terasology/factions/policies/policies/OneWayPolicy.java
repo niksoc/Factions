@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.policies.generator;
+package org.terasology.factions.policies.policies;
 
-import org.terasology.factions.policies.policies.OneWayPolicy;
+import org.terasology.reflection.MappedContainer;
 
-public abstract class OneWayPolicyGenerator<T extends OneWayPolicy> extends ExternalPolicyGenerator<T> {
+@MappedContainer
+public class OneWayPolicy extends ExternalPolicy {
 }

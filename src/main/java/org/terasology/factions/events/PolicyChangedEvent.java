@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.policies;
+package org.terasology.factions.events;
 
-public class InternalPolicy extends FactionPolicy {
+import org.terasology.entitySystem.event.Event;
+
+public class PolicyChangedEvent implements Event {
+
 }

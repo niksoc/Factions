@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.policies;
+package org.terasology.factions.policies.policies;
 
 import org.terasology.reflection.MappedContainer;
 
 @MappedContainer
-public abstract class FactionPolicy {
+public class InternalPolicy extends Policy {
 }

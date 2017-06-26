@@ -16,7 +16,7 @@
 package org.terasology.factions.policies.generator;
 
 import org.terasology.factions.FactionSystem;
-import org.terasology.factions.policies.ExternalPolicy;
+import org.terasology.factions.policies.policies.ExternalPolicy;
 
 public abstract class ExternalPolicyGenerator<T extends ExternalPolicy> extends FactionPolicyGenerator<T> {
     public abstract T getPolicy(String firstFaction, String secondFaction, FactionSystem factionSystem);

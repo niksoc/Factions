@@ -15,7 +15,7 @@
  */
 package org.terasology.factions.policies.generator;
 
-import org.terasology.factions.policies.FactionPolicy;
+import org.terasology.factions.policies.policies.Policy;
 
-public abstract class FactionPolicyGenerator<T extends FactionPolicy> {
+public abstract class FactionPolicyGenerator<T extends Policy> {
 }

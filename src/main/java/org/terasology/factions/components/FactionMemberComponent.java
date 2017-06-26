@@ -13,9 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.policies.generator;
+package org.terasology.factions.components;
 
-import org.terasology.factions.policies.policies.OneWayPolicy;
+import org.terasology.entitySystem.Component;
 
-public abstract class OneWayPolicyGenerator<T extends OneWayPolicy> extends ExternalPolicyGenerator<T> {
+public class FactionMemberComponent implements Component{
+    public String name;
+
+    public FactionMemberComponent() {
+    }
+
+    public FactionMemberComponent(String name) {
+        this.name = name;
+    }
 }
