@@ -140,7 +140,7 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
         return factionOne + ">" + factionTwo;
     }
 
-    private void createFaction(FactionComponent newFactionComponent) {
+    public void createFaction(FactionComponent newFactionComponent) {
         String newFaction = newFactionComponent.name;
         if (isExistingFaction(newFaction)) {
             logger.error("Faction with name " + newFaction + " already exists.");
