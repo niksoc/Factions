@@ -13,26 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.utils;
+package org.terasology.factions.ui;
 
-import org.terasology.reflection.MappedContainer;
+import org.lwjgl.input.Keyboard;
+import org.terasology.input.BindButtonEvent;
+import org.terasology.input.DefaultBinding;
+import org.terasology.input.InputType;
+import org.terasology.input.RegisterBindButton;
 
-@MappedContainer
-public abstract class Pair<L, R> {
-
-    protected final L left;
-    protected final R right;
-
-    public Pair(L left, R right) {
-        this.left = left;
-        this.right = right;
-    }
-
-    public L getLeft() {
-        return left;
-    }
-
-    public R getRight() {
-        return right;
-    }
+@RegisterBindButton(id = "factionInfo", description = "Faction Information", category = "interaction")
+@DefaultBinding(type = InputType.KEY, id = Keyboard.KEY_PERIOD)
+public class FactionInfoButton extends BindButtonEvent {
 }

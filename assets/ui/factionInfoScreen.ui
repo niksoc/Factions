@@ -1,0 +1,56 @@
+{
+  "type": "Factions:factionInfoScreen",
+  "skin": "engine:behaviorEditor",
+  "contents": {
+    "type": "migLayout",
+    "layoutConstraints": "",
+    "colConstraints": "[grow, fill][grow][grow]",
+    "rowConstraints": "[min][min!][]",
+    "contents": [
+      {
+        "type": "ScrollableArea",
+        "content": {
+          "type": "UIList",
+          "id": "policyList"
+        },
+        "layoutInfo": {
+          "cc": "cell 0 0, spany 3, w 300!"
+        }
+      },
+      {
+        "type": "UIDropdownScrollable",
+        "id": "select_faction1",
+        "layoutInfo": {
+          "cc": "cell 1 0"
+        }
+      },
+      {
+        "type": "UIDropdownScrollable",
+        "id": "select_faction2",
+        "layoutInfo": {
+          "cc": "cell 2 0"
+        }
+      },
+      {
+        "type": "UIBox",
+        "content": {
+          "type": "UILabel",
+          "id": "selectedPolicy"
+        },
+        "layoutInfo": {
+          "cc": "cell 1 1, spanx 2"
+        }
+      },
+      {
+        "type": "ScrollableArea",
+        "content": {
+          "type": "UIList",
+          "id": "policyFields"
+        },
+        "layoutInfo": {
+          "cc": "cell 1 2, spanx 2"
+        }
+      }
+    ]
+  }
+}

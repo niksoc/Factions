@@ -26,4 +26,9 @@ public class FactionComponent implements Component{
     public FactionComponent(String name) {
         this.name = name;
     }
+
+    @Override
+    public String toString() {
+        return name;
+    }
 }

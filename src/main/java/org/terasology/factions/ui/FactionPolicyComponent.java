@@ -17,15 +17,12 @@ package org.terasology.factions.ui;
 
 import org.terasology.entitySystem.Component;
 
-import java.util.Map;
-
 public class FactionPolicyComponent implements Component {
     public static final FactionPolicyComponent DEFAULT = new FactionPolicyComponent();
 
     public String name;
     public String category;
     public String description;
-    public Map<String, String> fieldDescriptions;
 
     @Override
     public String toString() {

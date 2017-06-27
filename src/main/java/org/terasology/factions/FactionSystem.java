@@ -15,10 +15,11 @@
  */
 package org.terasology.factions;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.SetMultimap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.terasology.assets.management.AssetManager;
-import org.terasology.entitySystem.entity.EntityBuilder;
 import org.terasology.entitySystem.entity.EntityManager;
 import org.terasology.entitySystem.entity.EntityRef;
 import org.terasology.entitySystem.event.ReceiveEvent;
@@ -31,27 +32,30 @@ import org.terasology.factions.components.FactionComponent;
 import org.terasology.factions.components.FactionDatabaseComponent;
 import org.terasology.factions.components.FactionMemberComponent;
 import org.terasology.factions.policies.FactionPolicySystem;
-import org.terasology.factions.policies.policies.InternalPolicy;
-import org.terasology.factions.policies.policies.Policy;
-import org.terasology.factions.policies.PolicyType;
 import org.terasology.factions.policies.PolicyComponent;
+import org.terasology.factions.policies.PolicyType;
+import org.terasology.factions.policies.policies.*;
 import org.terasology.logic.players.event.OnPlayerSpawnedEvent;
 import org.terasology.registry.In;
 import org.terasology.registry.Share;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @RegisterSystem
 @Share(FactionSystem.class)
 public class FactionSystem extends BaseComponentSystem implements UpdateSubscriberSystem {
     private EntityRef database;
     private Map<String, FactionComponent> factions = new HashMap<>();
+    private SetMultimap<Class<? extends InternalPolicy>
+            , InternalPolicyChangeCallback> internalPolicySubscribers = HashMultimap.create();
+    private SetMultimap<Class<? extends ExternalPolicy>
+            , ExternalPolicyChangeCallback> externalPolicySubscribers = HashMultimap.create();
 
     @In
     private EntityManager entityManager;
-    @In
-    private AssetManager assetManager;
     @In
     private PrefabManager prefabManager;
     @In
@@ -59,19 +63,59 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
 
     private static final Logger logger = LoggerFactory.getLogger(FactionSystem.class);
 
+    public Collection<FactionComponent> getFactions() {
+        return factions.values();
+    }
+
+    public <T extends InternalPolicy>
+    void registerPolicyChangeSubscriber(Class<T> policyClass, InternalPolicyChangeCallback<T> callback) {
+        internalPolicySubscribers.put(policyClass, callback);
+    }
+
+    public <T extends ExternalPolicy>
+    void registerPolicyChangeSubscriber(Class<T> policyClass, ExternalPolicyChangeCallback<T> callback) {
+        externalPolicySubscribers.put(policyClass, callback);
+    }
+
+    private <T extends InternalPolicy> void notifyInternalPolicyChangeSubscribers(T policy, String faction) {
+        internalPolicySubscribers.get(policy.getClass()).forEach(sub -> sub.onPolicyChange(policy, faction));
+    }
+
+    private <T extends ExternalPolicy> void notifyExternalPolicyChangeSubscribers(T policy,
+                                                                                  String factionOne, String factionTwo) {
+        externalPolicySubscribers.get(policy.getClass()).forEach(sub -> sub.onPolicyChange(policy, factionOne, factionTwo));
+    }
+
     @Override
     public void update(float delta) {
-        if (entityManager.getCountOfEntitiesWith(FactionDatabaseComponent.class) != 0) {
+        if (database != null) {
             return;
         }
 
-        EntityBuilder databaseBuilder = entityManager.newBuilder();
-        databaseBuilder.addComponent(new FactionDatabaseComponent());
-        for (Class<? extends Policy> policyClass : factionPolicySystem.getPolicyClasses()) {
-            databaseBuilder.addComponent(factionPolicySystem.getPolicyComponent(policyClass));
+        if (entityManager.getCountOfEntitiesWith(FactionDatabaseComponent.class) != 0) {
+            database = Iterables.getOnlyElement(
+                    entityManager.getEntitiesWith(FactionDatabaseComponent.class));
+            return;
         }
 
-        database = databaseBuilder.build();
+        try {
+            Prefab factionDatabasePrefab = Iterables.getOnlyElement(prefabManager.listPrefabs(FactionDatabaseComponent.class));
+            database = entityManager.create(factionDatabasePrefab);
+        } catch (NoSuchElementException e) {
+        } catch (IllegalArgumentException e) {
+            logger.error("more than one prefab with FactionDatabaseComponent -> ignoring!");
+        }
+
+        if (database == null) {
+            database = entityManager.create(new FactionDatabaseComponent());
+        }
+
+        for (Class<? extends Policy> policyClass : factionPolicySystem.getPolicyClasses()) {
+            final PolicyComponent policyComponent = factionPolicySystem.getPolicyComponent(policyClass);
+            if (!database.hasComponent(policyComponent.getClass())) {
+                database.addComponent(policyComponent);
+            }
+        }
 
         for (Prefab prefab : prefabManager.listPrefabs(FactionComponent.class)) {
             FactionComponent factionComponent = prefab.getComponent(FactionComponent.class);
@@ -85,11 +129,15 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
     }
 
     private String getTwoWayPolicyKey(String factionOne, String factionTwo) {
-        if (factionOne.compareTo(factionTwo) == 1) {
-            return factionOne + "`" + factionTwo;
+        if (factionOne.compareTo(factionTwo) > 0) {
+            return factionTwo + "&" + factionOne;
         } else {
-            return factionTwo + "`" + factionOne;
+            return factionOne + "&" + factionTwo;
         }
+    }
+
+    private String getOneWayPolicyKey(String factionOne, String factionTwo) {
+        return factionOne + ">" + factionTwo;
     }
 
     private void createFaction(FactionComponent newFactionComponent) {
@@ -108,18 +156,18 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
 
             PolicyType policyType = PolicyType.getPolicyType(policyClass);
             if (policyType == PolicyType.INTERNAL) {
-                policyComponent.getPolicyMap().put(newFaction,
+                policyComponent.getPolicyMap().putIfAbsent(newFaction,
                         policyComponent.newDefaultPolicy());
             } else {
                 for (String existingFaction : factions.keySet()) {
                     if (policyType == PolicyType.ONE_WAY) {
-                        policyComponent.getPolicyMap().put(newFaction + "`" + existingFaction,
+                        policyComponent.getPolicyMap().putIfAbsent(getOneWayPolicyKey(newFaction, existingFaction),
                                 policyComponent.newDefaultPolicy());
-                        policyComponent.getPolicyMap().put(existingFaction + "`" + newFaction,
+                        policyComponent.getPolicyMap().putIfAbsent(getOneWayPolicyKey(existingFaction, newFaction),
                                 policyComponent.newDefaultPolicy());
                     } else {
                         String key = getTwoWayPolicyKey(newFaction, existingFaction);
-                        policyComponent.getPolicyMap().put(key, policyComponent.newDefaultPolicy());
+                        policyComponent.getPolicyMap().putIfAbsent(key, policyComponent.newDefaultPolicy());
                     }
                 }
             }
@@ -135,7 +183,7 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
         return database.getComponent(policyComponentClass);
     }
 
-    public <T extends InternalPolicy> T getInternalPolicy(String factionName, Class<T> internalPolicyClass) {
+    public <T extends InternalPolicy> T getInternalPolicy(Class<T> internalPolicyClass, String factionName) {
         if (!isExistingFaction(factionName)) {
             logger.error("Faction " + factionName + " does not exist");
             return null;
@@ -147,10 +195,11 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
 
         }
 
-        return (T) getPolicyComponent(internalPolicyClass).getPolicyMap().get(factionName);
+
+        return (T) ((Policy) (getPolicyComponent(internalPolicyClass).getPolicyMap().get(factionName))).clone();
     }
 
-    public <T extends InternalPolicy> void saveInternalPolicy(String factionName, T internalPolicy) {
+    public <T extends InternalPolicy> void saveInternalPolicy(T internalPolicy, String factionName) {
         if (!isExistingFaction(factionName)) {
             logger.error("Faction " + factionName + " does not exist");
             return;
@@ -160,11 +209,12 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
         policyComponent.getPolicyMap().put(factionName, internalPolicy);
 
         database.saveComponent(policyComponent);
+
+        notifyInternalPolicyChangeSubscribers(internalPolicy, factionName);
+
     }
 
-/*
-    public <T extends OneWayPolicy> T getOneWayPolicy(String firstFactionName, String secondFactionName
-            , Class<T> oneWayPolicyClass) {
+    public <T extends OneWayPolicy> T getOneWayPolicy(Class<T> oneWayPolicyClass, String firstFactionName, String secondFactionName) {
         if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return null;
@@ -174,9 +224,11 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
             return null;
         }
 
+        return (T) ((Policy) (getPolicyComponent(oneWayPolicyClass).getPolicyMap()
+                .get(getOneWayPolicyKey(firstFactionName, secondFactionName)))).clone();
     }
 
-    public <T extends OneWayPolicy> void saveOneWayPolicy(String firstFactionName, String secondFactionName, T oneWayPolicy) {
+    public <T extends OneWayPolicy> void saveOneWayPolicy(T oneWayPolicy, String firstFactionName, String secondFactionName) {
         if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return;
@@ -185,11 +237,17 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
             logger.error("Faction " + secondFactionName + " does not exist");
             return;
         }
-        OrderedPair<String, String> factionPair = new OrderedPair<>(firstFactionName, secondFactionName);
+
+        PolicyComponent policyComponent = getPolicyComponent(oneWayPolicy.getClass());
+        policyComponent.getPolicyMap()
+                .put(getOneWayPolicyKey(firstFactionName, secondFactionName), oneWayPolicy);
+
+        database.saveComponent(policyComponent);
+
+        notifyExternalPolicyChangeSubscribers(oneWayPolicy, firstFactionName, secondFactionName);
     }
 
-    public <T extends TwoWayPolicy> T getTwoWayPolicy(String firstFactionName, String secondFactionName
-            , Class<T> twoWayPolicyClass) {
+    public <T extends TwoWayPolicy> T getTwoWayPolicy(Class<T> twoWayPolicyClass, String firstFactionName, String secondFactionName) {
         if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return null;
@@ -198,11 +256,13 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
             logger.error("Faction " + secondFactionName + " does not exist");
             return null;
         }
-        UnorderedPair<String, String> factionPair = new UnorderedPair<>(firstFactionName, secondFactionName);
+
+        return (T) ((Policy) (getPolicyComponent(twoWayPolicyClass).getPolicyMap()
+                .get(getTwoWayPolicyKey(firstFactionName, secondFactionName)))).clone();
+
     }
 
-    public <T extends TwoWayPolicy> void saveTwoWayPolicy(String firstFactionName, String secondFactionName
-            , T twoWayPolicy) {
+    public <T extends TwoWayPolicy> void saveTwoWayPolicy(T twoWayPolicy, String firstFactionName, String secondFactionName) {
         if (!isExistingFaction(firstFactionName)) {
             logger.error("Faction " + firstFactionName + " does not exist");
             return;
@@ -211,9 +271,14 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
             logger.error("Faction " + secondFactionName + " does not exist");
             return;
         }
-        UnorderedPair<String, String> factionPair = new UnorderedPair<>(firstFactionName, secondFactionName);
+        PolicyComponent policyComponent = getPolicyComponent(twoWayPolicy.getClass());
+        policyComponent.getPolicyMap()
+                .put(getTwoWayPolicyKey(firstFactionName, secondFactionName), twoWayPolicy);
+
+        database.saveComponent(policyComponent);
+
+        notifyExternalPolicyChangeSubscribers(twoWayPolicy, firstFactionName, secondFactionName);
     }
-*/
 
 
     @ReceiveEvent
@@ -221,4 +286,13 @@ public class FactionSystem extends BaseComponentSystem implements UpdateSubscrib
         entity.saveComponent(new FactionMemberComponent("Elves"));
     }
 
+    @FunctionalInterface
+    public static interface InternalPolicyChangeCallback<T extends Policy> {
+        public void onPolicyChange(T newPolicy, String faction);
+    }
+
+    @FunctionalInterface
+    public static interface ExternalPolicyChangeCallback<T extends Policy> {
+        public void onPolicyChange(T policy, String factionOne, String factionTwo);
+    }
 }

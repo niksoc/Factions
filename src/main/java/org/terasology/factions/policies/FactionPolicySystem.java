@@ -117,7 +117,8 @@ public class FactionPolicySystem extends BaseComponentSystem{
 
             policies.put(policyClass, factionPolicyComponent);
             policyComponents.put(policyClass, policyComponent);
-            categoryComponents.computeIfAbsent(factionPolicyComponent.category, k -> Arrays.asList(factionPolicyComponent));
+            categoryComponents.computeIfAbsent(factionPolicyComponent.category, k -> new ArrayList<>());
+            categoryComponents.get(factionPolicyComponent.category).add(factionPolicyComponent);
 
             logger.debug("Found Faction Policy: name=" + factionPolicyComponent.name);
 
@@ -152,6 +153,10 @@ public class FactionPolicySystem extends BaseComponentSystem{
 
     public List<FactionPolicyComponent> getFactionPolicyComponents(String category) {
         return categoryComponents.get(category);
+    }
+
+    public Class<? extends Policy> getPolicy(FactionPolicyComponent factionPolicyComponent) {
+        return policies.inverse().get(factionPolicyComponent);
     }
 
 }

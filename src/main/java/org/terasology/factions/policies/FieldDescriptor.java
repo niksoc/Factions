@@ -13,29 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.factions.utils;
+package org.terasology.factions.policies;
 
-import java.util.Objects;
+public class FieldDescriptor {
+    public final String name;
+    public final String value;
+    public final String description;
 
-public class OrderedPair<L, R> extends Pair<L, R> {
-
-    public OrderedPair(L left, R right) {
-        super(left, right);
+    public FieldDescriptor(String name, String value, String description) {
+        this.name = name;
+        this.value = value;
+        this.description = description;
     }
 
     @Override
-    public int hashCode() {
-        long l = left.hashCode() * 2654435761L;
-        return (int) l + (int) (l >>> 32) + right.hashCode();
+    public String toString() {
+        return name + "\t: " + value;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof Pair)) return false;
-        Pair pairo = (Pair) o;
-
-        return Objects.equals(this.left, pairo.getLeft())
-                && Objects.equals(this.right, pairo.getRight());
-    }
 }
-

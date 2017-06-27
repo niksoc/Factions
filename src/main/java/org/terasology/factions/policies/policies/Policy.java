@@ -15,8 +15,22 @@
  */
 package org.terasology.factions.policies.policies;
 
+import org.terasology.factions.policies.FieldDescriptor;
 import org.terasology.reflection.MappedContainer;
 
+import java.util.List;
+
 @MappedContainer
-public abstract class Policy {
+public abstract class Policy implements Cloneable {
+    public abstract List<FieldDescriptor> getFieldDescriptions();
+
+    @Override
+    public Object clone() {
+        try {
+            return super.clone();
+        } catch (CloneNotSupportedException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 }

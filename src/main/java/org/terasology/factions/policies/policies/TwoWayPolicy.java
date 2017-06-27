@@ -18,5 +18,5 @@ package org.terasology.factions.policies.policies;
 import org.terasology.reflection.MappedContainer;
 
 @MappedContainer
-public class TwoWayPolicy extends ExternalPolicy {
+public abstract class TwoWayPolicy extends ExternalPolicy {
 }

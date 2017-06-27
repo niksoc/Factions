@@ -20,8 +20,7 @@ import org.terasology.factions.policies.policies.Policy;
 
 import java.util.Map;
 
-public interface PolicyComponent<T extends Policy> extends Component {
-    public T newDefaultPolicy();
-
-    public Map<String, T> getPolicyMap();
+public abstract class PolicyComponent<T extends Policy> implements Component {
+    public abstract T newDefaultPolicy();
+    public abstract Map<String, T> getPolicyMap();
 }

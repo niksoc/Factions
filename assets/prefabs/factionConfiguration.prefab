@@ -1,0 +1,20 @@
+{
+  "factionDatabase": {},
+  "internalTradePolicy": {
+    "policyMap": {
+      "Elves": {
+        "discount": 0.7
+      },
+      "Dwarves": {
+        "discount": 0.8
+      }
+    }
+  },
+  "externalTradePolicy": {
+    "policyMap": {
+      "Dwarves&Elves": {
+        "tradeAllowed": false
+      }
+    }
+  }
+}
